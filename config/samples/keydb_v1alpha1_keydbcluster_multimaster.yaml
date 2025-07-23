@@ -1,0 +1,59 @@
+apiVersion: keydb.io/v1alpha1
+kind: KeyDBCluster
+metadata:
+  name: keydb-multimaster-sample
+  namespace: default
+spec:
+  mode: multi-master
+  replicas: 3
+  image: eqalpha/keydb:latest
+
+  multiMaster:
+    activeReplica: true
+
+  config:
+    maxMemory: "2gb"
+    persistence: true
+    requirePass:
+      secretRef:
+        name: keydb-auth
+        key: password
+    tls:
+      enabled: true
+      secretName: keydb-tls-certs
+      requireClientCerts: false
+    customConfig:
+      tcp-keepalive: "300"
+      maxclients: "10000"
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+
+  storage:
+    size: "20Gi"
+    storageClass: "fast-ssd"
+
+  service:
+    type: "ClusterIP"
+    port: 6379
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+
+  monitoring:
+    enabled: true
+    port: 9121
+    serviceMonitorLabels:
+      prometheus: "kube-prometheus"
+
+  upgrade:
+    strategy: "RollingUpdate"
+    maxUnavailable: 1
+    validationTimeoutSeconds: 300
+
+  podDisruptionBudget:
+    maxUnavailable: 1

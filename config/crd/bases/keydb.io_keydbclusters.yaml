@@ -1,0 +1,509 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: keydbclusters.keydb.io
+spec:
+  group: keydb.io
+  names:
+    kind: KeyDBCluster
+    listKind: KeyDBClusterList
+    plural: keydbclusters
+    singular: keydbcluster
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.mode
+      name: Mode
+      type: string
+    - jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
+    - jsonPath: .status.readyReplicas
+      name: Ready
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: KeyDBCluster is the Schema for the keydbclusters API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: KeyDBClusterSpec defines the desired state of KeyDBCluster
+            properties:
+              cluster:
+                description: Cluster mode specific configuration
+                properties:
+                  replicasPerShard:
+                    default: 1
+                    description: Number of replicas per shard
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  shards:
+                    default: 3
+                    description: Number of shards (masters)
+                    format: int32
+                    minimum: 1
+                    type: integer
+                type: object
+              config:
+                description: KeyDB configuration options
+                properties:
+                  customConfig:
+                    additionalProperties:
+                      type: string
+                    description: Custom KeyDB configuration parameters
+                    type: object
+                  maxMemory:
+                    description: Maximum memory usage (e.g., "1gb", "512mb")
+                    type: string
+                  persistence:
+                    default: true
+                    description: Enable persistence
+                    type: boolean
+                  requirePass:
+                    description: Password authentication configuration
+                    properties:
+                      secretRef:
+                        description: Reference to a secret containing the password
+                        properties:
+                          key:
+                            description: Key in the secret
+                            type: string
+                          name:
+                            description: Name of the secret
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      value:
+                        description: Plain text password (not recommended for production)
+                        type: string
+                    type: object
+                  tls:
+                    description: TLS configuration
+                    properties:
+                      enabled:
+                        description: Enable TLS
+                        type: boolean
+                      requireClientCerts:
+                        description: Require client certificates
+                        type: boolean
+                      secretName:
+                        description: Secret containing TLS certificates
+                        type: string
+                    type: object
+                type: object
+              image:
+                default: eqalpha/keydb:latest
+                description: KeyDB container image
+                type: string
+              livenessProbe:
+                description: Liveness probe configuration
+                properties:
+                  enabled:
+                    description: 'Enable the probe (default: true)'
+                    type: boolean
+                  exec:
+                    description: Command to execute for exec probe
+                    items:
+                      type: string
+                    type: array
+                  failureThreshold:
+                    default: 3
+                    description: Minimum consecutive failures for the probe to be
+                      considered failed
+                    format: int32
+                    type: integer
+                  initialDelaySeconds:
+                    default: 5
+                    description: Initial delay before starting probes
+                    format: int32
+                    type: integer
+                  periodSeconds:
+                    default: 10
+                    description: How often to perform the probe
+                    format: int32
+                    type: integer
+                  successThreshold:
+                    default: 1
+                    description: Minimum consecutive successes for the probe to be
+                      considered successful
+                    format: int32
+                    type: integer
+                  timeoutSeconds:
+                    default: 1
+                    description: Timeout for the probe
+                    format: int32
+                    type: integer
+                type: object
+              mode:
+                description: Deployment mode
+                enum:
+                - multi-master
+                - cluster
+                type: string
+              monitoring:
+                description: Monitoring configuration
+                properties:
+                  enabled:
+                    default: true
+                    description: Enable Prometheus metrics
+                    type: boolean
+                  port:
+                    default: 9121
+                    description: Metrics port
+                    format: int32
+                    type: integer
+                  serviceMonitorLabels:
+                    additionalProperties:
+                      type: string
+                    description: ServiceMonitor labels for Prometheus operator
+                    type: object
+                type: object
+              multiMaster:
+                description: Multi-master specific configuration
+                properties:
+                  activeReplica:
+                    default: true
+                    description: Enable active replica mode
+                    type: boolean
+                type: object
+              podDisruptionBudget:
+                description: Pod disruption budget configuration
+                properties:
+                  maxUnavailable:
+                    description: Maximum unavailable pods
+                    format: int32
+                    type: integer
+                  minAvailable:
+                    description: Minimum available pods
+                    format: int32
+                    type: integer
+                type: object
+              readinessProbe:
+                description: Readiness probe configuration
+                properties:
+                  enabled:
+                    description: 'Enable the probe (default: true)'
+                    type: boolean
+                  exec:
+                    description: Command to execute for exec probe
+                    items:
+                      type: string
+                    type: array
+                  failureThreshold:
+                    default: 3
+                    description: Minimum consecutive failures for the probe to be
+                      considered failed
+                    format: int32
+                    type: integer
+                  initialDelaySeconds:
+                    default: 5
+                    description: Initial delay before starting probes
+                    format: int32
+                    type: integer
+                  periodSeconds:
+                    default: 10
+                    description: How often to perform the probe
+                    format: int32
+                    type: integer
+                  successThreshold:
+                    default: 1
+                    description: Minimum consecutive successes for the probe to be
+                      considered successful
+                    format: int32
+                    type: integer
+                  timeoutSeconds:
+                    default: 1
+                    description: Timeout for the probe
+                    format: int32
+                    type: integer
+                type: object
+              replicas:
+                default: 3
+                description: Number of KeyDB instances (for multi-master mode)
+                format: int32
+                minimum: 1
+                type: integer
+              resources:
+                description: Resource requirements
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This is an alpha field and requires enabling the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+              service:
+                description: Service configuration
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Service annotations
+                    type: object
+                  port:
+                    default: 6379
+                    description: Service port
+                    format: int32
+                    type: integer
+                  type:
+                    default: ClusterIP
+                    description: Service type
+                    type: string
+                type: object
+              storage:
+                description: Storage configuration
+                properties:
+                  size:
+                    default: 10Gi
+                    description: Storage size
+                    type: string
+                  storageClass:
+                    description: Storage class name
+                    type: string
+                type: object
+              topologySpreadConstraints:
+                description: Topology spread constraints configuration
+                properties:
+                  enabled:
+                    default: false
+                    description: Enable topology spread constraints
+                    type: boolean
+                  maxSkew:
+                    default: 1
+                    description: Maximum skew allowed between zones
+                    format: int32
+                    type: integer
+                  topologyKey:
+                    default: topology.kubernetes.io/zone
+                    description: Topology key to spread across (e.g., "topology.kubernetes.io/zone")
+                    type: string
+                  whenUnsatisfiable:
+                    default: DoNotSchedule
+                    description: What to do when constraint cannot be satisfied
+                    enum:
+                    - DoNotSchedule
+                    - ScheduleAnyway
+                    type: string
+                type: object
+              upgrade:
+                description: Upgrade configuration
+                properties:
+                  maxUnavailable:
+                    default: 1
+                    description: Maximum unavailable pods during upgrade
+                    format: int32
+                    type: integer
+                  strategy:
+                    default: RollingUpdate
+                    description: Rolling upgrade strategy
+                    type: string
+                  validationTimeoutSeconds:
+                    default: 300
+                    description: Validation timeout for each pod during upgrade
+                    format: int32
+                    type: integer
+                type: object
+            required:
+            - mode
+            type: object
+          status:
+            description: KeyDBClusterStatus defines the observed state of KeyDBCluster
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              currentImage:
+                description: Current image version being used
+                type: string
+              nodes:
+                description: Individual node status
+                items:
+                  description: NodeStatus represents the status of an individual KeyDB
+                    node
+                  properties:
+                    endpoint:
+                      description: Node endpoint
+                      type: string
+                    name:
+                      description: Node name
+                      type: string
+                    role:
+                      description: Node role (master/replica)
+                      type: string
+                    status:
+                      description: Node status
+                      type: string
+                  type: object
+                type: array
+              phase:
+                description: Current phase
+                type: string
+              readyReplicas:
+                description: Number of ready replicas
+                format: int32
+                type: integer
+              replicas:
+                description: Total number of replicas
+                format: int32
+                type: integer
+              upgradeStatus:
+                description: Upgrade status
+                properties:
+                  phase:
+                    description: Current upgrade phase
+                    type: string
+                  startTime:
+                    description: Upgrade start time
+                    format: date-time
+                    type: string
+                  targetImage:
+                    description: Target image for upgrade
+                    type: string
+                  totalPods:
+                    description: Total pods to upgrade
+                    format: int32
+                    type: integer
+                  upgradedPods:
+                    description: Pods upgraded so far
+                    format: int32
+                    type: integer
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
