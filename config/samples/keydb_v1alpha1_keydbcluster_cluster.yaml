@@ -1,0 +1,47 @@
+apiVersion: keydb.io/v1alpha1
+kind: KeyDBCluster
+metadata:
+  name: keydb-cluster-sample
+  namespace: default
+spec:
+  mode: cluster
+  image: eqalpha/keydb:latest
+
+  cluster:
+    shards: 3
+    replicasPerShard: 1
+
+  config:
+    maxMemory: "1gb"
+    persistence: true
+    customConfig:
+      cluster-node-timeout: "5000"
+      cluster-replica-validity-factor: "10"
+
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+  storage:
+    size: "10Gi"
+    storageClass: "standard"
+
+  service:
+    type: "ClusterIP"
+    port: 6379
+
+  monitoring:
+    enabled: true
+    port: 9121
+
+  upgrade:
+    strategy: "RollingUpdate"
+    maxUnavailable: 1
+    validationTimeoutSeconds: 600
+
+  podDisruptionBudget:
+    minAvailable: 4
