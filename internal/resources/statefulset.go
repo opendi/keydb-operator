@@ -218,7 +218,7 @@ echo "All pods are ready. Cluster initialization will be handled by the first po
 }
 
 func getMultiMasterInitScript(keydbCluster *keydbv1alpha1.KeyDBCluster) string {
-	return fmt.Sprintf(`
+return fmt.Sprintf(`
 # Configure multi-master replication
 REPLICAS=%d
 NAMESPACE=%s
@@ -230,8 +230,31 @@ POD_INDEX=${POD_NAME##*-}
 
 echo "Configuring multi-master replication for pod ${POD_INDEX}..."
 
-# Wait a bit for the server to start
-sleep 10
+# Wait for KeyDB to be ready to accept commands
+echo "Waiting for KeyDB to be ready..."
+MAX_ATTEMPTS=60
+ATTEMPT=0
+while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+  if keydb-cli ping > /dev/null 2>&1; then
+    # Check if still loading from disk
+    LOADING=$(keydb-cli info persistence 2>/dev/null | grep "^loading:" | cut -d: -f2 | tr -d '\r')
+    if [ "$LOADING" = "0" ]; then
+      echo "KeyDB is ready and not loading"
+      break
+    else
+      echo "KeyDB is still loading data from disk..."
+    fi
+  else
+    echo "KeyDB not ready yet (attempt $((ATTEMPT+1))/$MAX_ATTEMPTS)..."
+  fi
+  ATTEMPT=$((ATTEMPT+1))
+  sleep 2
+done
+
+if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+  echo "ERROR: KeyDB did not become ready in time"
+  exit 1
+fi
 
 # Connect to other masters
 for i in $(seq 0 $((REPLICAS-1))); do
