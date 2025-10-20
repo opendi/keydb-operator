@@ -306,14 +306,170 @@ func (r *KeyDBClusterReconciler) reconcileStatefulSet(ctx context.Context, keydb
 		}
 	}
 
-	// Update if needed (simplified - in production you'd want more sophisticated update logic)
+	// Check if update is needed
+	needsUpdate := false
+	updateReasons := []string{}
+
+	// Check replicas
 	if found.Spec.Replicas == nil || *found.Spec.Replicas != *statefulSet.Spec.Replicas {
-		logger.Info("Updating StatefulSet replicas", "current", *found.Spec.Replicas, "desired", *statefulSet.Spec.Replicas)
+		updateReasons = append(updateReasons, fmt.Sprintf("replicas: %d -> %d", *found.Spec.Replicas, *statefulSet.Spec.Replicas))
 		found.Spec.Replicas = statefulSet.Spec.Replicas
+		needsUpdate = true
+	}
+
+	// Check container image
+	if len(found.Spec.Template.Spec.Containers) > 0 && len(statefulSet.Spec.Template.Spec.Containers) > 0 {
+		currentImage := found.Spec.Template.Spec.Containers[0].Image
+		desiredImage := statefulSet.Spec.Template.Spec.Containers[0].Image
+		if currentImage != desiredImage {
+			updateReasons = append(updateReasons, fmt.Sprintf("image: %s -> %s", currentImage, desiredImage))
+			found.Spec.Template.Spec.Containers[0].Image = desiredImage
+			needsUpdate = true
+		}
+	}
+
+	// Check resources
+	if len(found.Spec.Template.Spec.Containers) > 0 && len(statefulSet.Spec.Template.Spec.Containers) > 0 {
+		currentResources := found.Spec.Template.Spec.Containers[0].Resources
+		desiredResources := statefulSet.Spec.Template.Spec.Containers[0].Resources
+		if !resourcesEqual(currentResources, desiredResources) {
+			updateReasons = append(updateReasons, "resources changed")
+			found.Spec.Template.Spec.Containers[0].Resources = desiredResources
+			needsUpdate = true
+		}
+	}
+
+	// Check readiness probe
+	if len(found.Spec.Template.Spec.Containers) > 0 && len(statefulSet.Spec.Template.Spec.Containers) > 0 {
+		currentProbe := found.Spec.Template.Spec.Containers[0].ReadinessProbe
+		desiredProbe := statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe
+		if !probesEqual(currentProbe, desiredProbe) {
+			updateReasons = append(updateReasons, "readiness probe changed")
+			found.Spec.Template.Spec.Containers[0].ReadinessProbe = desiredProbe
+			needsUpdate = true
+		}
+	}
+
+	// Check liveness probe
+	if len(found.Spec.Template.Spec.Containers) > 0 && len(statefulSet.Spec.Template.Spec.Containers) > 0 {
+		currentProbe := found.Spec.Template.Spec.Containers[0].LivenessProbe
+		desiredProbe := statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe
+		if !probesEqual(currentProbe, desiredProbe) {
+			updateReasons = append(updateReasons, "liveness probe changed")
+			found.Spec.Template.Spec.Containers[0].LivenessProbe = desiredProbe
+			needsUpdate = true
+		}
+	}
+
+	// Check lifecycle hooks
+	if len(found.Spec.Template.Spec.Containers) > 0 && len(statefulSet.Spec.Template.Spec.Containers) > 0 {
+		currentLifecycle := found.Spec.Template.Spec.Containers[0].Lifecycle
+		desiredLifecycle := statefulSet.Spec.Template.Spec.Containers[0].Lifecycle
+		if !lifecycleEqual(currentLifecycle, desiredLifecycle) {
+			updateReasons = append(updateReasons, "lifecycle hooks changed")
+			found.Spec.Template.Spec.Containers[0].Lifecycle = desiredLifecycle
+			needsUpdate = true
+		}
+	}
+
+	if needsUpdate {
+		logger.Info("Updating StatefulSet", "reasons", updateReasons)
 		return r.Update(ctx, found)
 	}
 
 	return nil
+}
+
+// Helper functions for comparison
+func resourcesEqual(a, b corev1.ResourceRequirements) bool {
+	return a.Limits.Cpu().Equal(*b.Limits.Cpu()) &&
+		a.Limits.Memory().Equal(*b.Limits.Memory()) &&
+		a.Requests.Cpu().Equal(*b.Requests.Cpu()) &&
+		a.Requests.Memory().Equal(*b.Requests.Memory())
+}
+
+func probesEqual(a, b *corev1.Probe) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	// Compare key fields - for simplicity, we'll do a deep comparison
+	// In production, you might want to serialize and compare or use reflect.DeepEqual
+	return a.InitialDelaySeconds == b.InitialDelaySeconds &&
+		a.TimeoutSeconds == b.TimeoutSeconds &&
+		a.PeriodSeconds == b.PeriodSeconds &&
+		a.SuccessThreshold == b.SuccessThreshold &&
+		a.FailureThreshold == b.FailureThreshold &&
+		execActionsEqual(a.Exec, b.Exec) &&
+		httpGetActionsEqual(a.HTTPGet, b.HTTPGet) &&
+		tcpSocketActionsEqual(a.TCPSocket, b.TCPSocket)
+}
+
+func execActionsEqual(a, b *corev1.ExecAction) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if len(a.Command) != len(b.Command) {
+		return false
+	}
+	for i := range a.Command {
+		if a.Command[i] != b.Command[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func httpGetActionsEqual(a, b *corev1.HTTPGetAction) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Path == b.Path &&
+		a.Port == b.Port &&
+		a.Host == b.Host &&
+		a.Scheme == b.Scheme
+}
+
+func tcpSocketActionsEqual(a, b *corev1.TCPSocketAction) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Port == b.Port &&
+		a.Host == b.Host
+}
+
+func lifecycleEqual(a, b *corev1.Lifecycle) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return lifecycleHandlerEqual(a.PostStart, b.PostStart) &&
+		lifecycleHandlerEqual(a.PreStop, b.PreStop)
+}
+
+func lifecycleHandlerEqual(a, b *corev1.LifecycleHandler) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return execActionsEqual(a.Exec, b.Exec) &&
+		httpGetActionsEqual(a.HTTPGet, b.HTTPGet) &&
+		tcpSocketActionsEqual(a.TCPSocket, b.TCPSocket)
 }
 
 func (r *KeyDBClusterReconciler) updateStatus(ctx context.Context, keydbCluster *keydbv1alpha1.KeyDBCluster) error {

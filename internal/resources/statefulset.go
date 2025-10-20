@@ -218,7 +218,7 @@ echo "All pods are ready. Cluster initialization will be handled by the first po
 }
 
 func getMultiMasterInitScript(keydbCluster *keydbv1alpha1.KeyDBCluster) string {
-return fmt.Sprintf(`
+	return fmt.Sprintf(`
 # Configure multi-master replication
 REPLICAS=%d
 NAMESPACE=%s
@@ -438,12 +438,12 @@ func buildReadinessProbe(keydbCluster *keydbv1alpha1.KeyDBCluster) *corev1.Probe
 	readinessProbe := &corev1.Probe{
 		InitialDelaySeconds: int32OrDefault(probe.GetInitialDelaySeconds(), 5),
 		PeriodSeconds:       int32OrDefault(probe.GetPeriodSeconds(), 10),
-		TimeoutSeconds:      int32OrDefault(probe.GetTimeoutSeconds(), 1),
+		TimeoutSeconds:      int32OrDefault(probe.GetTimeoutSeconds(), 5), // Increased timeout for complex checks
 		SuccessThreshold:    int32OrDefault(probe.GetSuccessThreshold(), 1),
 		FailureThreshold:    int32OrDefault(probe.GetFailureThreshold(), 3),
 	}
 
-	// Use custom exec command if provided, otherwise default to keydb-cli PING
+	// Use custom exec command if provided, otherwise use mode-specific readiness check
 	if probe != nil && len(probe.Exec) > 0 {
 		readinessProbe.ProbeHandler = corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
@@ -453,12 +453,95 @@ func buildReadinessProbe(keydbCluster *keydbv1alpha1.KeyDBCluster) *corev1.Probe
 	} else {
 		readinessProbe.ProbeHandler = corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
-				Command: []string{"keydb-cli", "-p", "6379", "PING"},
+				Command: buildReadinessCommand(keydbCluster),
 			},
 		}
 	}
 
 	return readinessProbe
+}
+
+// buildReadinessCommand creates a mode-specific readiness check command
+func buildReadinessCommand(keydbCluster *keydbv1alpha1.KeyDBCluster) []string {
+	switch keydbCluster.Spec.Mode {
+	case keydbv1alpha1.MultiMasterMode:
+		return []string{
+			"sh",
+			"-c",
+			`
+# Multi-master readiness check
+# 1. Check if KeyDB responds to PING
+if ! keydb-cli ping > /dev/null 2>&1; then
+  echo "KeyDB not responding to PING"
+  exit 1
+fi
+
+# 2. Check if KeyDB is not loading data from disk
+LOADING=$(keydb-cli info persistence 2>/dev/null | grep "^loading:" | cut -d: -f2 | tr -d '\r')
+if [ "$LOADING" != "0" ]; then
+  echo "KeyDB is still loading data from disk"
+  exit 1
+fi
+
+# 3. Check if multi-master replication is configured (role should be active-replica)
+ROLE=$(keydb-cli info replication 2>/dev/null | grep "^role:" | cut -d: -f2 | tr -d '\r')
+if [ "$ROLE" != "active-replica" ]; then
+  echo "Multi-master replication not configured yet (role: $ROLE)"
+  exit 1
+fi
+
+echo "KeyDB is ready for multi-master mode"
+exit 0
+`,
+		}
+	case keydbv1alpha1.ClusterMode:
+		return []string{
+			"sh",
+			"-c",
+			`
+# Cluster mode readiness check
+# 1. Check if KeyDB responds to PING
+if ! keydb-cli ping > /dev/null 2>&1; then
+  echo "KeyDB not responding to PING"
+  exit 1
+fi
+
+# 2. Check if KeyDB is not loading data from disk
+LOADING=$(keydb-cli info persistence 2>/dev/null | grep "^loading:" | cut -d: -f2 | tr -d '\r')
+if [ "$LOADING" != "0" ]; then
+  echo "KeyDB is still loading data from disk"
+  exit 1
+fi
+
+echo "KeyDB is ready for cluster mode"
+exit 0
+`,
+		}
+	default:
+		// Default mode (standalone) - just check PING and loading status
+		return []string{
+			"sh",
+			"-c",
+			`
+# Standalone mode readiness check
+# 1. Check if KeyDB responds to PING
+if ! keydb-cli ping > /dev/null 2>&1; then
+  echo "KeyDB not responding to PING"
+  exit 1
+fi
+
+# 2. Check if KeyDB is not loading data from disk
+LOADING=$(keydb-cli info persistence 2>/dev/null | grep "^loading:" | cut -d: -f2 | tr -d '\r')
+if [ "$LOADING" != "0" ]; then
+  echo "KeyDB is still loading data from disk"
+  exit 1
+fi
+
+echo "KeyDB is ready for standalone mode"
+exit 0
+`,
+		}
+	}
 }
 
 // int32OrDefault returns the value if not nil, otherwise returns the default
