@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: manager
-        image: docker.io/opendi/keydb-operator:v0.1.0
+        image: docker.io/opendi/keydb-operator:v0.2.0
         ports:
         - containerPort: 8080
           name: metrics
